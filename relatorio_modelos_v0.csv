@@ -1,0 +1,4 @@
+Modelo,EER,ROC-AUC,F1-Score,Balanced_Accuracy
+M0: SVM (Baseline),50.00%,0.5,0.6678276012189813,0.5
+M1: MLP (Rede Neural),50.00%,0.5,0.6678276012189813,0.5
+M2: Random Forest,50.00%,0.5,0.6678276012189813,0.5

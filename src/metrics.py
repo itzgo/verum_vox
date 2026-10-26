@@ -8,6 +8,7 @@ from sklearn.metrics import (
 from scipy.optimize import brentq
 from scipy.interpolate import interp1d
 
+
 # ==========================================
 # 1. Equal Error Rate (EER)
 # ==========================================
@@ -20,6 +21,7 @@ def calcular_eer(y_true, y_scores):
     eer = brentq(lambda x: 1. - x - interp1d(fpr, tpr)(x), 0., 1.)
     return eer
 
+
 # ==========================================
 # 2. ROC-AUC
 # ==========================================
@@ -30,6 +32,7 @@ def calcular_roc_auc(y_true, y_scores):
     """
     return roc_auc_score(y_true, y_scores)
 
+
 # ==========================================
 # 3. F1-Score
 # ==========================================
@@ -38,6 +41,7 @@ def calcular_f1(y_true, y_pred):
     F1-Score: Métrica complementar para avaliação de precisão e recall.
     """
     return f1_score(y_true, y_pred)
+
 
 # ==========================================
 # 4. Balanced Accuracy
@@ -49,17 +53,16 @@ def calcular_balanced_accuracy(y_true, y_pred):
     """
     return balanced_accuracy_score(y_true, y_pred)
 
+
 # ==========================================
 # 5. min t-DCF (minimum Tandem Detection Cost Function)
 # ==========================================
 def calcular_min_tdcf(cm_scores, asv_scores=None):
     """
     Calcula o min t-DCF. 
-    
     Nota Metodológica: O min t-DCF oficial do protocolo ASVspoof avalia a 
     atuação conjunta do seu modelo (CM - Countermeasure) com um sistema 
     Automático de Verificação de Locutor (ASV).
-    
     Para o cálculo real e submissão, será necessário utilizar o script 
     'eval_metrics.py' disponibilizado pela organização do ASVspoof, cruzando 
     os scores gerados pelo seu modelo (cm_scores) com os scores ASV (asv_scores) 
@@ -68,9 +71,9 @@ def calcular_min_tdcf(cm_scores, asv_scores=None):
     if asv_scores is None:
         print("[Aviso] min t-DCF ignorado: Requer os scores do sistema ASV para ser calculado.")
         return None
-        
     # O código oficial do ASVspoof deve ser plugado aqui futuramente
     pass
+
 
 # ==========================================
 # Função Auxiliar de Relatório
