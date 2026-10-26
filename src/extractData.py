@@ -4,6 +4,7 @@ import warnings
 
 warnings.filterwarnings('ignore', category=UserWarning)
 
+
 def extract_data(caminho_audio, n_mfcc=13):
     """
     Extrai a média dos coeficientes MFCCs de um arquivo de áudio.
@@ -19,7 +20,8 @@ def extract_data(caminho_audio, n_mfcc=13):
             
         mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc)
         mfccs_mean = np.mean(mfccs.T, axis=0)
-        
+
+        analitcs['Ok'] = analitcs['Ok'] + 1
         return mfccs_mean
         
     except Exception as e:
