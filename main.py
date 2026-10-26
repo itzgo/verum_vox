@@ -1,52 +1,72 @@
+import os
+import random
 import numpy as np
-import librosa
 from sklearn.svm import SVC
-from sklearn.metrics import roc_curve, f1_score, roc_auc_score
-from scipy.optimize import brentq
-from scipy.interpolate import interp1d
 
 # ==========================================
-# 1. Funções de Extração de Características
+# Importando funções dos módulos
 # ==========================================
-def extrair_caracteristicas(caminho_audio, n_mfcc=13):
-    """
-    Extrai a média dos coeficientes MFCCs de um arquivo de áudio.
-    Em versões futuras, podemos adicionar delta, delta-delta e espectrogramas.
-    """
-    y, sr = librosa.load(caminho_audio, sr=16000) # Reamostragem padrão para 16kHz
-    mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=n_mfcc)
-    mfccs_mean = np.mean(mfccs.T, axis=0) # Resumo do áudio pela média dos quadros
-    return mfccs_mean
+from src.extractData import extract_data
+from src.metrics import gerar_relatorio_metricas
 
-# ==========================================
-# 2. Cálculo do EER (Equal Error Rate)
-# ==========================================
-def calcular_eer(y_true, y_scores):
-    """
-    Calcula a Equal Error Rate (EER), onde a Taxa de Falsos Positivos (FPR)
-    é igual à Taxa de Falsos Negativos (FNR).
-    """
-    fpr, tpr, thresholds = roc_curve(y_true, y_scores, pos_label=1)
-    fnr = 1 - tpr
-    # Encontra o ponto onde FPR e FNR se cruzam
-    eer = brentq(lambda x : 1. - x - interp1d(fpr, tpr)(x), 0., 1.)
-    return eer
 
-# ==========================================
-# 3. Pipeline Simplificado de Treino e Avaliação
-# ==========================================
+def carregar_protocolo(caminho_txt, pasta_audios, porcentagem=0.05):
+    """
+    Lê o arquivo de protocolo do ASVspoof 2021 (Teste Cego - 1 Coluna), 
+    checa a existência dos áudios e gera rótulos simulados para rodar o pipeline.
+    """
+    caminhos_validos = []
+
+    if not os.path.exists(caminho_txt):
+        raise FileNotFoundError(f"Arquivo de protocolo não encontrado: {caminho_txt}")
+
+    with open(caminho_txt, 'r') as f:
+        for linha in f:
+            audio_id = linha.strip() # Pega apenas a string da linha (ex: DF_E_2000011)
+            
+            if not audio_id:
+                continue
+
+            caminho_flac = os.path.join(pasta_audios, f"{audio_id}.flac")
+
+            # Verifica se o arquivo existe FISICAMENTE na pasta
+            if os.path.exists(caminho_flac):
+                caminhos_validos.append(caminho_flac)
+
+    if len(caminhos_validos) == 0:
+        raise ValueError(f"Nenhum arquivo .flac do protocolo foi encontrado na pasta {pasta_audios}.")
+
+    # Filtramos a porcentagem desejada
+    random.seed(42)
+    qtd_amostras = max(1, int(len(caminhos_validos) * porcentagem))
+    
+    indices_amostrados = random.sample(range(len(caminhos_validos)), qtd_amostras)
+    
+    caminhos = [caminhos_validos[i] for i in indices_amostrados]
+    
+    # ATENÇÃO: Como essa base de eval não tem os rótulos no txt, 
+    # vamos criar rótulos aleatórios (0 e 1) apenas para o código não quebrar e testarmos o pipeline.
+    rotulos = [random.choice([0, 1]) for _ in caminhos]
+
+    print(f"-> Áudios reais encontrados na pasta: {len(caminhos_validos)}.")
+    print(f"-> Amostra selecionada para teste ({porcentagem*100}%): {len(caminhos)} áudios.")
+    print(f"-> AVISO: Usando rótulos simulados para o ASVspoof 2021 DF.")
+    
+    return caminhos, rotulos
+
+
 def executar_pipeline_v0(caminhos_treino, rotulos_treino, caminhos_teste, rotulos_teste):
     """
     Treina o modelo M0 (SVM) e avalia no conjunto de teste.
     0: Áudio Real (Bonafide)
     1: Áudio Sintético (Spoof)
     """
-    print("1. Extraindo características de treino...")
-    X_train = np.array([extrair_caracteristicas(arq) for arq in caminhos_treino])
+    print("\n1. Extraindo características de treino...")
+    X_train = np.array([extract_data(arq) for arq in caminhos_treino])
     y_train = np.array(rotulos_treino)
 
     print("2. Extraindo características de teste...")
-    X_test = np.array([extrair_caracteristicas(arq) for arq in caminhos_teste])
+    X_test = np.array([extract_data(arq) for arq in caminhos_teste])
     y_test = np.array(rotulos_teste)
 
     print("3. Treinando o modelo M0 (Baseline SVM)...")
@@ -58,41 +78,43 @@ def executar_pipeline_v0(caminhos_treino, rotulos_treino, caminhos_teste, rotulo
     y_pred = model.predict(X_test)
 
     print("5. Calculando Métricas do Projeto...")
-    eer = calcular_eer(y_test, y_scores)
-    auc = roc_auc_score(y_test, y_scores)
-    f1 = f1_score(y_test, y_pred)
+    relatorio = gerar_relatorio_metricas(y_test, y_scores, y_pred)
 
-    print("-" * 35)
-    print(f"Resultados da Versão 0 (M0 - SVM):")
-    print(f"• EER (Métrica Principal): {eer * 100:.2f}%")
-    print(f"• ROC-AUC:               {auc:.4f}")
-    print(f"• F1-Score:              {f1:.4f}")
-    print("-" * 35)
+    print("-" * 45)
+    print(f"Resultados da Versão 0 (M0 - SVM) [Amostra 5%]:")
+    print(f"• EER (Métrica Principal): {relatorio['EER'] * 100:.2f}%")
+    print(f"• ROC-AUC:               {relatorio['ROC-AUC']:.4f}")
+    print(f"• F1-Score:              {relatorio['F1-Score']:.4f}")
+    print(f"• Balanced Accuracy:     {relatorio['Balanced_Accuracy']:.4f}")
+    print("-" * 45)
 
     return model
 
+
 # ==========================================
-# 4. Exemplo de Execução (Sintético para Teste)
+# Execução Real com Dados do Projeto
 # ==========================================
 if __name__ == "__main__":
-    # IMPORTANTE: Subsitua pelos caminhos dos seus arquivos do ASVspoof 2019
-    # Para rodar direto de exemplo, usaremos dados fictícios simulados:
-    print("--- Executando com dados simulados para validação da estrutura ---")
+    # Caminhos absolutos fornecidos
+    BASE_DIR = "/home/italo/Documentos/verum_vox/data/ASVspoof2021_DF_eval_part00"
     
-    # 0 = Real, 1 = Sintético
-    y_train_sim = [0, 0, 1, 1] * 10
-    y_test_sim = [0, 1, 0, 1] * 5
+    PROTOCOLO = f"{BASE_DIR}/ASVspoof2021.DF.cm.eval.trl.txt"
+    PASTA_AUDIOS = f"{BASE_DIR}/flac"
 
-    # Matrizes simuladas de MFCCs (Substitui a leitura de áudios reais no teste simples)
-    X_train_sim = np.random.randn(40, 13) 
-    X_test_sim = np.random.randn(20, 13)
+    print("--- Verum Vox: Iniciando Treino e Avaliação (Versão 0 - 5% Amostragem) ---")
+    
+    # Carregar x% das amostras do protocolo
+    caminhos_totais, rotulos_totais = carregar_protocolo(PROTOCOLO, PASTA_AUDIOS, porcentagem=0.05)
+    
+    # em 80% para treino e 20% para teste apenas para validar a execução.
+    limite = int(len(caminhos_totais) * 0.8)
+    
+    caminhos_tr = caminhos_totais[:limite]
+    rotulos_tr = rotulos_totais[:limite]
+    
+    caminhos_te = caminhos_totais[limite:]
+    rotulos_te = rotulos_totais[limite:]
 
-    # Treino rápido com os vetores de teste
-    svm = SVC(kernel='rbf', probability=True, random_state=42)
-    svm.fit(X_train_sim, y_train_sim)
-    scores = svm.predict_proba(X_test_sim)[:, 1]
-    preds = svm.predict(X_test_sim)
+    print(f"-> Divisão para teste rápido: {len(caminhos_tr)} para treino e {len(caminhos_te)} para teste.")
 
-    eer = calcular_eer(y_test_sim, scores)
-    print(f"Exemplo de cálculo de EER: {eer * 100:.2f}%")
-    print(f"Exemplo de ROC-AUC: {roc_auc_score(y_test_sim, scores):.4f}")
+    modelo_treinado = executar_pipeline_v0(caminhos_tr, rotulos_tr, caminhos_te, rotulos_te)
